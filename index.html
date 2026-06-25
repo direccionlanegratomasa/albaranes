@@ -1,0 +1,352 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dashboard — Negra Tomasa</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #ffffff; --bg2: #f5f5f3; --bg3: #efefec;
+    --text: #1a1a18; --text2: #6b6b67; --text3: #9a9a96;
+    --border: rgba(0,0,0,0.1); --border2: rgba(0,0,0,0.18);
+    --green: #3B6D11; --red: #A32D2D;
+    --radius-md: 8px; --radius-lg: 12px;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #1e1e1c; --bg2: #2a2a28; --bg3: #333331;
+      --text: #f0ede8; --text2: #a8a8a2; --text3: #6e6e6a;
+      --border: rgba(255,255,255,0.1); --border2: rgba(255,255,255,0.18);
+      --green: #97C459; --red: #F09595;
+    }
+  }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: var(--bg3); color: var(--text); min-height: 100vh; padding: 1.5rem 1rem; }
+  .container { max-width: 920px; margin: 0 auto; }
+  .header { display: flex; align-items: flex-start; justify-content: space-between; flex-wrap: wrap; gap: 12px; margin-bottom: 1.5rem; }
+  .header h1 { font-size: 22px; font-weight: 600; }
+  .header p { font-size: 13px; color: var(--text2); margin-top: 2px; }
+  .date-nav { display: flex; align-items: center; gap: 8px; background: var(--bg); border: 0.5px solid var(--border2); border-radius: var(--radius-md); padding: 6px 10px; }
+  .date-nav button { background: none; border: none; cursor: pointer; color: var(--text); font-size: 16px; padding: 2px 6px; border-radius: 4px; }
+  .date-nav button:hover { background: var(--bg2); }
+  #date-label { font-size: 14px; font-weight: 500; min-width: 200px; text-align: center; }
+  .btn-today { background: none; border: 0.5px solid var(--border2); cursor: pointer; color: var(--text2); font-size: 12px; padding: 4px 10px; border-radius: var(--radius-md); }
+  .btn-today:hover { background: var(--bg2); }
+  .section-label { font-size: 11px; font-weight: 600; color: var(--text3); text-transform: uppercase; letter-spacing: 0.07em; margin: 1.5rem 0 10px; }
+  .kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
+  .kpi { background: var(--bg); border: 0.5px solid var(--border); border-radius: var(--radius-md); padding: 14px 16px; }
+  .kpi-label { font-size: 12px; color: var(--text2); margin-bottom: 4px; }
+  .kpi-value { font-size: 28px; font-weight: 600; line-height: 1; }
+  .kpi-delta { font-size: 12px; margin-top: 4px; }
+  .kpi-delta.up { color: var(--green); }
+  .kpi-delta.down { color: var(--red); }
+  .kpi-prev { font-size: 11px; color: var(--text3); margin-top: 2px; }
+  .charts-row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 10px; }
+  @media (max-width: 600px) { .charts-row { grid-template-columns: 1fr; } }
+  .card { background: var(--bg); border: 0.5px solid var(--border); border-radius: var(--radius-lg); padding: 1rem 1.25rem; }
+  .card h3 { font-size: 13px; font-weight: 500; color: var(--text2); margin-bottom: 10px; }
+  .legend { display: flex; gap: 14px; flex-wrap: wrap; margin-bottom: 8px; font-size: 11px; color: var(--text2); }
+  .legend span { display: flex; align-items: center; gap: 5px; }
+  .ldot { width: 9px; height: 9px; border-radius: 2px; flex-shrink: 0; }
+  .loading { display: flex; align-items: center; gap: 10px; color: var(--text2); font-size: 14px; padding: 2rem 0; }
+  .spinner { width: 18px; height: 18px; border: 2px solid var(--border2); border-top-color: var(--text2); border-radius: 50%; animation: spin 0.7s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .error-box { background: #fff0f0; border: 0.5px solid #f09595; border-radius: var(--radius-md); padding: 1rem; font-size: 13px; color: #a32d2d; }
+  .no-data { color: var(--text3); font-size: 13px; padding: 0.5rem 0; }
+  .sync-bar { display: flex; align-items: center; justify-content: space-between; background: var(--bg); border: 0.5px solid var(--border); border-radius: var(--radius-md); padding: 10px 14px; margin-bottom: 1rem; font-size: 12px; color: var(--text2); }
+  .sync-dot { width: 7px; height: 7px; border-radius: 50%; background: #3B6D11; display: inline-block; margin-right: 6px; }
+  .btn-refresh { background: none; border: 0.5px solid var(--border2); cursor: pointer; color: var(--text2); font-size: 11px; padding: 3px 10px; border-radius: var(--radius-md); }
+  .btn-refresh:hover { background: var(--bg2); }
+  .footer { text-align: center; font-size: 11px; color: var(--text3); margin-top: 2rem; }
+
+  /* Modal entrada de datos */
+  .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.45); z-index: 100; align-items: center; justify-content: center; }
+  .modal-overlay.open { display: flex; }
+  .modal { background: var(--bg); border-radius: var(--radius-lg); padding: 1.5rem; width: 100%; max-width: 380px; border: 0.5px solid var(--border2); }
+  .modal h2 { font-size: 16px; font-weight: 600; margin-bottom: 1rem; }
+  .form-row { margin-bottom: 12px; }
+  .form-row label { display: block; font-size: 12px; color: var(--text2); margin-bottom: 4px; }
+  .form-row input { width: 100%; padding: 8px 10px; border: 0.5px solid var(--border2); border-radius: var(--radius-md); background: var(--bg2); color: var(--text); font-size: 14px; }
+  .modal-btns { display: flex; gap: 8px; margin-top: 1rem; }
+  .btn-save { flex: 1; padding: 9px; background: #1a1a18; color: #fff; border: none; border-radius: var(--radius-md); cursor: pointer; font-size: 14px; font-weight: 500; }
+  .btn-save:hover { opacity: 0.85; }
+  .btn-cancel { flex: 1; padding: 9px; background: none; border: 0.5px solid var(--border2); border-radius: var(--radius-md); cursor: pointer; font-size: 14px; color: var(--text2); }
+  .btn-add { background: #1a1a18; color: #fff; border: none; border-radius: var(--radius-md); padding: 7px 14px; font-size: 12px; cursor: pointer; }
+  .btn-add:hover { opacity: 0.85; }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <!-- HEADER -->
+  <div class="header">
+    <div>
+      <h1>Negra Tomasa · Dashboard</h1>
+      <p>Conectado a Notion · Se actualiza automáticamente</p>
+    </div>
+    <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;">
+      <div class="date-nav">
+        <button onclick="changeDay(-1)">←</button>
+        <div id="date-label">–</div>
+        <button onclick="changeDay(1)">→</button>
+      </div>
+      <div style="display:flex;gap:6px;">
+        <button class="btn-today" onclick="goToday()">← Hoy</button>
+        <button class="btn-add" onclick="openModal()">+ Añadir día</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- SYNC BAR -->
+  <div class="sync-bar">
+    <span><span class="sync-dot"></span><span id="sync-status">Cargando datos desde Notion...</span></span>
+    <button class="btn-refresh" onclick="loadData()">↻ Actualizar</button>
+  </div>
+
+  <!-- CONTENIDO PRINCIPAL -->
+  <div id="main-content">
+    <div class="loading"><div class="spinner"></div> Conectando con Notion...</div>
+  </div>
+
+</div>
+
+<!-- MODAL AÑADIR DÍA -->
+<div class="modal-overlay" id="modal">
+  <div class="modal">
+    <h2>Añadir registro diario</h2>
+    <div class="form-row"><label>Fecha</label><input type="date" id="f-fecha"></div>
+    <div class="form-row"><label>Comidas</label><input type="number" id="f-comidas" min="0" placeholder="0"></div>
+    <div class="form-row"><label>Cenas</label><input type="number" id="f-cenas" min="0" placeholder="0"></div>
+    <div class="form-row"><label>Última llamada</label><input type="text" id="f-llamada" placeholder="22:30"></div>
+    <div id="modal-error" style="font-size:12px;color:var(--red);min-height:16px;margin-top:4px;"></div>
+    <div class="modal-btns">
+      <button class="btn-cancel" onclick="closeModal()">Cancelar</button>
+      <button class="btn-save" onclick="saveRecord()">Guardar en Notion</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ─── CONFIGURACIÓN ───────────────────────────────────────────────
+// Sustituye esta URL por la de tu Cloudflare Worker después de desplegarlo
+const WORKER_URL = "https://dashboard-lnt.direccion-lanegratomasa.workers.dev";
+
+// Datos históricos del chat (respaldo mientras Notion se rellena)
+const HISTORICAL = {"2025-05-23":{comidas:15,cenas:143,llamada:"19:30"},"2025-05-24":{comidas:42,cenas:139,llamada:"20:03"},"2025-05-25":{comidas:24,cenas:56,llamada:"19:51"},"2025-05-28":{comidas:6,cenas:67,llamada:"18:28"},"2025-05-29":{comidas:34,cenas:104,llamada:"20:01"},"2025-05-31":{comidas:19,cenas:111,llamada:"19:13"},"2025-06-01":{comidas:79,cenas:124,llamada:"17:24"},"2025-06-02":{comidas:0,cenas:49,llamada:"21:07"},"2025-06-04":{comidas:18,cenas:36,llamada:"21:57"},"2025-06-05":{comidas:36,cenas:86,llamada:"21:05"},"2025-06-06":{comidas:13,cenas:122,llamada:"20:24"},"2025-06-07":{comidas:65,cenas:158,llamada:"20:28"},"2025-06-08":{comidas:47,cenas:72,llamada:"20:58"},"2025-06-11":{comidas:16,cenas:46,llamada:"21:25"},"2025-06-12":{comidas:8,cenas:76,llamada:"21:05"},"2025-06-13":{comidas:22,cenas:147,llamada:"17:53"},"2025-06-15":{comidas:95,cenas:49,llamada:"21:36"},"2025-06-17":{comidas:0,cenas:36,llamada:"22:25"},"2025-06-18":{comidas:17,cenas:67,llamada:"21:47"},"2025-06-19":{comidas:34,cenas:56,llamada:"21:15"},"2025-06-20":{comidas:11,cenas:137,llamada:"20:10"},"2025-06-21":{comidas:67,cenas:140,llamada:null},"2025-06-23":{comidas:0,cenas:61,llamada:"21:35"},"2025-06-25":{comidas:40,cenas:116,llamada:"19:17"},"2025-06-26":{comidas:30,cenas:74,llamada:"20:55"},"2025-06-27":{comidas:20,cenas:141,llamada:"21:07"},"2025-06-28":{comidas:43,cenas:147,llamada:"21:03"},"2025-07-01":{comidas:0,cenas:54,llamada:"21:16"},"2025-07-03":{comidas:0,cenas:67,llamada:"20:12"},"2025-07-06":{comidas:34,cenas:119,llamada:null},"2025-07-09":{comidas:2,cenas:57,llamada:"21:19"},"2025-07-10":{comidas:12,cenas:60,llamada:"22:56"},"2025-07-11":{comidas:13,cenas:122,llamada:"20:51"},"2025-07-12":{comidas:32,cenas:130,llamada:"20:22"},"2025-07-13":{comidas:39,cenas:89,llamada:"21:30"},"2025-07-17":{comidas:24,cenas:72,llamada:"22:28"},"2025-07-18":{comidas:36,cenas:100,llamada:"20:02"},"2025-07-20":{comidas:63,cenas:132,llamada:"22:12"},"2025-07-22":{comidas:0,cenas:78,llamada:null},"2025-07-24":{comidas:20,cenas:84,llamada:"21:54"},"2025-07-25":{comidas:17,cenas:99,llamada:"21:08"},"2025-07-26":{comidas:34,cenas:141,llamada:"21:25"},"2025-07-28":{comidas:30,cenas:42,llamada:"17:18"},"2025-07-30":{comidas:28,cenas:52,llamada:"22:13"},"2025-07-31":{comidas:36,cenas:93,llamada:"21:53"},"2025-08-01":{comidas:11,cenas:129,llamada:"22:36"},"2025-08-03":{comidas:41,cenas:93,llamada:"20:29"},"2025-08-06":{comidas:29,cenas:77,llamada:"22:21"},"2025-08-07":{comidas:28,cenas:77,llamada:"19:03"},"2025-08-08":{comidas:6,cenas:99,llamada:null},"2025-08-10":{comidas:29,cenas:103,llamada:"22:17"},"2025-08-14":{comidas:9,cenas:122,llamada:"22:07"},"2025-09-27":{comidas:32,cenas:127,llamada:"22:39"},"2025-09-28":{comidas:43,cenas:126,llamada:"23:27"},"2025-09-29":{comidas:0,cenas:99,llamada:"20:04"},"2025-10-02":{comidas:10,cenas:82,llamada:"22:53"},"2025-10-04":{comidas:27,cenas:120,llamada:"20:06"},"2025-10-05":{comidas:85,cenas:94,llamada:"19:47"},"2025-10-08":{comidas:22,cenas:58,llamada:"23:05"},"2025-10-09":{comidas:15,cenas:96,llamada:"20:41"},"2025-10-10":{comidas:11,cenas:125,llamada:"22:51"},"2025-10-15":{comidas:17,cenas:102,llamada:"19:59"},"2025-10-16":{comidas:15,cenas:86,llamada:"22:48"},"2025-10-19":{comidas:39,cenas:92,llamada:"21:58"},"2025-10-20":{comidas:0,cenas:53,llamada:"22:23"},"2025-10-21":{comidas:0,cenas:78,llamada:"22:30"},"2025-10-22":{comidas:0,cenas:70,llamada:"20:45"},"2025-10-23":{comidas:9,cenas:82,llamada:"20:08"},"2025-10-24":{comidas:18,cenas:156,llamada:"23:15"},"2025-10-25":{comidas:110,cenas:141,llamada:"22:41"},"2025-10-26":{comidas:63,cenas:88,llamada:"22:27"},"2025-10-27":{comidas:0,cenas:67,llamada:"21:20"},"2025-10-29":{comidas:7,cenas:75,llamada:"22:47"},"2025-10-31":{comidas:27,cenas:134,llamada:null},"2025-11-01":{comidas:68,cenas:138,llamada:null},"2025-11-02":{comidas:102,cenas:89,llamada:null},"2025-11-03":{comidas:0,cenas:61,llamada:null},"2025-11-04":{comidas:0,cenas:65,llamada:null},"2025-11-07":{comidas:23,cenas:111,llamada:null},"2025-11-08":{comidas:72,cenas:154,llamada:null},"2025-11-09":{comidas:47,cenas:115,llamada:null},"2025-11-14":{comidas:32,cenas:123,llamada:null},"2025-11-15":{comidas:108,cenas:118,llamada:null},"2025-11-22":{comidas:99,cenas:115,llamada:null},"2025-11-26":{comidas:21,cenas:49,llamada:null},"2025-11-27":{comidas:31,cenas:63,llamada:null},"2025-11-28":{comidas:46,cenas:146,llamada:null},"2025-11-29":{comidas:106,cenas:129,llamada:null},"2025-11-30":{comidas:89,cenas:75,llamada:null},"2025-12-01":{comidas:0,cenas:66,llamada:"22:31"},"2025-12-02":{comidas:0,cenas:28,llamada:"21:17"},"2025-12-03":{comidas:25,cenas:69,llamada:"22:05"},"2025-12-04":{comidas:11,cenas:74,llamada:"23:06"},"2025-12-05":{comidas:39,cenas:145,llamada:"23:22"},"2025-12-06":{comidas:112,cenas:158,llamada:"22:26"},"2025-12-07":{comidas:90,cenas:151,llamada:"21:41"},"2025-12-08":{comidas:32,cenas:67,llamada:"22:41"},"2025-12-09":{comidas:6,cenas:43,llamada:"19:43"},"2025-12-10":{comidas:32,cenas:40,llamada:"22:36"},"2025-12-11":{comidas:11,cenas:91,llamada:"22:05"},"2025-12-12":{comidas:56,cenas:122,llamada:"23:15"},"2025-12-13":{comidas:112,cenas:125,llamada:"22:54"},"2025-12-14":{comidas:75,cenas:86,llamada:"21:29"},"2025-12-15":{comidas:0,cenas:67,llamada:"23:03"},"2025-12-16":{comidas:0,cenas:81,llamada:"22:27"},"2025-12-17":{comidas:18,cenas:74,llamada:"21:30"},"2025-12-18":{comidas:2,cenas:86,llamada:"21:08"},"2025-12-19":{comidas:52,cenas:120,llamada:"21:36"},"2025-12-20":{comidas:104,cenas:140,llamada:"22:49"},"2025-12-21":{comidas:49,cenas:124,llamada:"21:30"},"2025-12-22":{comidas:35,cenas:83,llamada:"23:26"},"2025-12-23":{comidas:14,cenas:97,llamada:"22:08"},"2025-12-24":{comidas:73,cenas:0,llamada:"17:12"},"2025-12-25":{comidas:72,cenas:100,llamada:"21:09"},"2025-12-26":{comidas:60,cenas:125,llamada:"22:40"},"2025-12-27":{comidas:79,cenas:120,llamada:"22:36"},"2025-12-28":{comidas:83,cenas:109,llamada:"21:21"},"2025-12-29":{comidas:33,cenas:101,llamada:"22:20"},"2025-12-30":{comidas:14,cenas:96,llamada:"23:34"},"2026-01-01":{comidas:80,cenas:121,llamada:"23:18"},"2026-01-02":{comidas:47,cenas:99,llamada:"23:00"},"2026-01-03":{comidas:86,cenas:90,llamada:"22:11"},"2026-01-04":{comidas:64,cenas:114,llamada:"21:58"},"2026-01-05":{comidas:2,cenas:104,llamada:"22:16"},"2026-01-06":{comidas:13,cenas:69,llamada:"22:39"},"2026-01-07":{comidas:29,cenas:33,llamada:null},"2026-01-08":{comidas:10,cenas:61,llamada:"21:44"},"2026-01-09":{comidas:17,cenas:120,llamada:"23:01"},"2026-01-10":{comidas:41,cenas:111,llamada:"21:08"},"2026-01-11":{comidas:75,cenas:54,llamada:"22:21"},"2026-01-12":{comidas:0,cenas:28,llamada:"22:55"},"2026-01-13":{comidas:0,cenas:18,llamada:"22:30"},"2026-01-14":{comidas:13,cenas:57,llamada:"21:36"},"2026-01-15":{comidas:5,cenas:122,llamada:"21:57"},"2026-01-17":{comidas:69,cenas:124,llamada:"21:42"},"2026-01-18":{comidas:34,cenas:56,llamada:"16:03"},"2026-01-19":{comidas:0,cenas:50,llamada:"21:50"},"2026-01-20":{comidas:0,cenas:44,llamada:"20:21"},"2026-01-21":{comidas:4,cenas:75,llamada:"21:39"},"2026-01-22":{comidas:12,cenas:93,llamada:"22:11"},"2026-01-23":{comidas:24,cenas:125,llamada:"22:53"},"2026-01-24":{comidas:67,cenas:151,llamada:"22:03"},"2026-01-25":{comidas:51,cenas:83,llamada:"21:04"},"2026-01-26":{comidas:0,cenas:55,llamada:"21:37"},"2026-01-28":{comidas:6,cenas:53,llamada:"22:44"},"2026-01-30":{comidas:18,cenas:122,llamada:"22:39"},"2026-02-01":{comidas:40,cenas:88,llamada:null},"2026-02-02":{comidas:0,cenas:29,llamada:"22:30"},"2026-02-03":{comidas:0,cenas:51,llamada:"23:09"},"2026-02-04":{comidas:16,cenas:48,llamada:null},"2026-02-05":{comidas:6,cenas:63,llamada:"22:20"},"2026-02-06":{comidas:17,cenas:108,llamada:"22:34"},"2026-02-07":{comidas:76,cenas:133,llamada:"23:05"},"2026-02-08":{comidas:36,cenas:106,llamada:"22:22"},"2026-02-09":{comidas:0,cenas:54,llamada:"22:44"},"2026-02-11":{comidas:8,cenas:61,llamada:"22:30"},"2026-02-12":{comidas:10,cenas:39,llamada:"22:51"},"2026-02-13":{comidas:18,cenas:115,llamada:"22:10"},"2026-02-14":{comidas:121,cenas:127,llamada:"22:05"},"2026-02-15":{comidas:91,cenas:103,llamada:"22:00"},"2026-02-16":{comidas:0,cenas:65,llamada:"21:30"},"2026-02-17":{comidas:0,cenas:63,llamada:"20:56"},"2026-03-01":{comidas:0,cenas:96,llamada:"21:33"},"2026-03-02":{comidas:0,cenas:34,llamada:"22:04"},"2026-03-03":{comidas:0,cenas:41,llamada:"21:58"},"2026-03-04":{comidas:9,cenas:72,llamada:"21:20"},"2026-03-05":{comidas:15,cenas:79,llamada:"23:03"},"2026-03-06":{comidas:20,cenas:116,llamada:"23:00"},"2026-03-07":{comidas:78,cenas:151,llamada:"22:57"},"2026-03-08":{comidas:48,cenas:118,llamada:"22:30"},"2026-03-09":{comidas:0,cenas:48,llamada:"22:13"},"2026-03-10":{comidas:0,cenas:46,llamada:"22:20"},"2026-03-11":{comidas:9,cenas:73,llamada:null},"2026-03-12":{comidas:22,cenas:71,llamada:"23:17"},"2026-03-13":{comidas:22,cenas:133,llamada:"21:35"},"2026-03-14":{comidas:69,cenas:137,llamada:"22:30"},"2026-03-15":{comidas:30,cenas:75,llamada:"22:30"},"2026-03-16":{comidas:0,cenas:68,llamada:"22:47"},"2026-03-17":{comidas:0,cenas:43,llamada:"23:02"},"2026-03-18":{comidas:20,cenas:56,llamada:"21:15"},"2026-03-19":{comidas:12,cenas:86,llamada:"22:17"},"2026-03-20":{comidas:24,cenas:131,llamada:"23:21"},"2026-03-21":{comidas:74,cenas:141,llamada:"22:09"},"2026-03-22":{comidas:76,cenas:83,llamada:"22:40"},"2026-03-23":{comidas:0,cenas:26,llamada:"21:20"},"2026-03-24":{comidas:0,cenas:75,llamada:"21:23"},"2026-03-25":{comidas:19,cenas:59,llamada:"22:07"},"2026-03-26":{comidas:7,cenas:78,llamada:"22:54"},"2026-03-27":{comidas:16,cenas:138,llamada:"22:50"},"2026-03-28":{comidas:68,cenas:144,llamada:"23:19"},"2026-03-29":{comidas:61,cenas:99,llamada:"22:21"},"2026-03-30":{comidas:0,cenas:53,llamada:null},"2026-03-31":{comidas:0,cenas:47,llamada:null},"2026-04-01":{comidas:0,cenas:85,llamada:null},"2026-04-02":{comidas:32,cenas:124,llamada:null},"2026-04-03":{comidas:37,cenas:102,llamada:"22:23"},"2026-04-04":{comidas:62,cenas:130,llamada:"23:33"},"2026-04-05":{comidas:63,cenas:69,llamada:"21:44"},"2026-04-06":{comidas:0,cenas:25,llamada:null},"2026-04-07":{comidas:0,cenas:30,llamada:null},"2026-04-08":{comidas:12,cenas:85,llamada:"21:58"},"2026-04-09":{comidas:4,cenas:74,llamada:"22:50"},"2026-04-10":{comidas:12,cenas:97,llamada:"22:32"},"2026-04-11":{comidas:61,cenas:131,llamada:"23:26"},"2026-04-12":{comidas:61,cenas:77,llamada:"21:59"},"2026-04-13":{comidas:0,cenas:44,llamada:"20:37"},"2026-04-14":{comidas:0,cenas:40,llamada:"21:30"},"2026-04-15":{comidas:4,cenas:36,llamada:"21:59"},"2026-04-16":{comidas:21,cenas:68,llamada:"23:10"},"2026-04-17":{comidas:14,cenas:98,llamada:"23:02"},"2026-04-18":{comidas:74,cenas:115,llamada:"22:03"},"2026-04-19":{comidas:40,cenas:74,llamada:"22:55"},"2026-04-20":{comidas:0,cenas:82,llamada:"23:20"},"2026-04-21":{comidas:0,cenas:55,llamada:"20:52"},"2026-04-22":{comidas:6,cenas:67,llamada:"21:47"},"2026-04-23":{comidas:15,cenas:77,llamada:"20:47"},"2026-04-24":{comidas:8,cenas:105,llamada:"22:43"},"2026-04-25":{comidas:96,cenas:109,llamada:"20:16"},"2026-04-26":{comidas:44,cenas:96,llamada:"22:56"},"2026-04-27":{comidas:0,cenas:59,llamada:"20:23"},"2026-04-28":{comidas:0,cenas:69,llamada:"23:10"},"2026-04-29":{comidas:10,cenas:41,llamada:"22:13"},"2026-04-30":{comidas:6,cenas:132,llamada:"21:36"},"2026-05-01":{comidas:57,cenas:140,llamada:"23:09"},"2026-05-02":{comidas:72,cenas:127,llamada:"22:11"},"2026-05-03":{comidas:74,cenas:106,llamada:"20:53"},"2026-05-04":{comidas:0,cenas:79,llamada:"22:38"},"2026-05-05":{comidas:0,cenas:54,llamada:"21:58"},"2026-05-06":{comidas:31,cenas:54,llamada:null},"2026-05-07":{comidas:8,cenas:73,llamada:"20:26"},"2026-05-08":{comidas:23,cenas:127,llamada:"23:12"},"2026-05-09":{comidas:63,cenas:147,llamada:"22:07"},"2026-05-11":{comidas:0,cenas:46,llamada:"20:33"},"2026-05-12":{comidas:0,cenas:44,llamada:"20:45"},"2026-05-13":{comidas:8,cenas:39,llamada:null},"2026-05-14":{comidas:2,cenas:104,llamada:"23:13"},"2026-05-15":{comidas:38,cenas:90,llamada:"22:09"},"2026-05-16":{comidas:66,cenas:147,llamada:"22:27"},"2026-05-17":{comidas:27,cenas:45,llamada:"21:41"},"2026-05-18":{comidas:0,cenas:49,llamada:"20:58"},"2026-05-19":{comidas:0,cenas:48,llamada:"22:18"},"2026-05-20":{comidas:4,cenas:44,llamada:"22:09"},"2026-05-21":{comidas:5,cenas:95,llamada:"21:55"},"2026-05-22":{comidas:17,cenas:110,llamada:"23:10"},"2026-05-23":{comidas:45,cenas:132,llamada:"23:25"},"2026-05-24":{comidas:29,cenas:88,llamada:null},"2026-05-25":{comidas:0,cenas:58,llamada:"22:28"},"2026-05-26":{comidas:0,cenas:74,llamada:"21:23"},"2026-05-29":{comidas:18,cenas:127,llamada:"22:58"},"2026-05-30":{comidas:68,cenas:111,llamada:"22:04"},"2026-05-31":{comidas:50,cenas:79,llamada:"22:50"},"2026-06-01":{comidas:0,cenas:88,llamada:"22:18"},"2026-06-03":{comidas:28,cenas:82,llamada:"21:40"},"2026-06-04":{comidas:23,cenas:92,llamada:"23:08"},"2026-06-05":{comidas:15,cenas:112,llamada:"22:34"},"2026-06-06":{comidas:16,cenas:103,llamada:"22:08"},"2026-06-07":{comidas:31,cenas:60,llamada:"21:48"},"2026-06-08":{comidas:0,cenas:67,llamada:"20:51"},"2026-06-09":{comidas:0,cenas:74,llamada:"20:41"},"2026-06-10":{comidas:20,cenas:77,llamada:"22:12"},"2026-06-11":{comidas:32,cenas:73,llamada:"23:20"},"2026-06-12":{comidas:35,cenas:128,llamada:"23:42"},"2026-06-13":{comidas:80,cenas:130,llamada:"23:00"},"2026-06-14":{comidas:47,cenas:71,llamada:"22:02"},"2026-06-15":{comidas:0,cenas:60,llamada:"23:33"},"2026-06-16":{comidas:0,cenas:33,llamada:"22:03"},"2026-06-17":{comidas:11,cenas:60,llamada:"22:10"},"2026-06-18":{comidas:37,cenas:75,llamada:null},"2026-06-19":{comidas:24,cenas:112,llamada:null},"2026-06-20":{comidas:44,cenas:102,llamada:"23:03"},"2026-06-21":{comidas:50,cenas:66,llamada:"22:19"},"2026-06-22":{comidas:0,cenas:68,llamada:"20:58"},"2026-06-23":{comidas:0,cenas:42,llamada:"22:05"},"2026-06-24":{comidas:14,cenas:76,llamada:"22:05"}};
+
+let DATA = { ...HISTORICAL };
+let selDate = new Date();
+let lastSync = null;
+
+function dateKey(d) { return d.toISOString().slice(0,10); }
+function fmtDate(d) { return d.toLocaleDateString('es-ES',{weekday:'long',day:'numeric',month:'long',year:'numeric'}); }
+function changeDay(n) { selDate = new Date(selDate); selDate.setDate(selDate.getDate()+n); renderDashboard(); }
+function goToday() { selDate = new Date(); renderDashboard(); }
+
+async function loadData() {
+  document.getElementById('sync-status').textContent = 'Sincronizando con Notion...';
+  try {
+    const res = await fetch(WORKER_URL + '/data');
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const rows = await res.json();
+    rows.forEach(r => {
+      if (r.fecha) DATA[r.fecha] = { comidas: r.comidas || 0, cenas: r.cenas || 0, llamada: r.llamada };
+    });
+    lastSync = new Date();
+    document.getElementById('sync-status').textContent = `Datos actualizados · ${lastSync.toLocaleTimeString('es-ES',{hour:'2-digit',minute:'2-digit'})}`;
+  } catch(e) {
+    document.getElementById('sync-status').textContent = 'Sin conexión con Notion · Mostrando datos locales';
+  }
+  renderDashboard();
+}
+
+function delta(curr, prev) {
+  if (prev == null || prev === 0) return null;
+  return Math.round(((curr-prev)/prev)*100);
+}
+function deltaHtml(pct, prev) {
+  if (pct == null) return `<div class="kpi-prev">Sin dato anterior</div>`;
+  const cls = pct >= 0 ? 'up' : 'down', arrow = pct >= 0 ? '↑' : '↓';
+  return `<div class="kpi-delta ${cls}">${arrow} ${pct>=0?'+':''}${pct}% vs sem. ant.</div><div class="kpi-prev">Semana anterior: ${prev ?? '–'}</div>`;
+}
+
+let charts = {};
+function destroyChart(id) { if (charts[id]) { charts[id].destroy(); delete charts[id]; } }
+
+const baseOpts = {
+  responsive: true, maintainAspectRatio: false,
+  plugins: { legend: { display: false } },
+  scales: {
+    x: { grid: { display: false }, ticks: { font: { size: 10 }, maxRotation: 45, autoSkip: false } },
+    y: { beginAtZero: true, ticks: { font: { size: 10 } }, grid: { color: 'rgba(128,128,128,0.12)' } }
+  }
+};
+
+function renderDashboard() {
+  document.getElementById('main-content').innerHTML = `
+    <div class="section-label">Día seleccionado vs misma semana anterior</div>
+    <div class="kpi-grid" id="kpi-day"></div>
+    <div class="charts-row">
+      <div class="card"><h3>Últimos 14 días — comidas</h3>
+        <div class="legend"><span><span class="ldot" style="background:#378ADD"></span>Esta semana</span><span><span class="ldot" style="background:#B5D4F4"></span>Sem. anterior</span></div>
+        <div style="position:relative;width:100%;height:190px;"><canvas id="weekComidas" role="img" aria-label="Comidas 14 días"></canvas></div>
+      </div>
+      <div class="card"><h3>Últimos 14 días — cenas</h3>
+        <div class="legend"><span><span class="ldot" style="background:#1D9E75"></span>Esta semana</span><span><span class="ldot" style="background:#9FE1CB"></span>Sem. anterior</span></div>
+        <div style="position:relative;width:100%;height:190px;"><canvas id="weekCenas" role="img" aria-label="Cenas 14 días"></canvas></div>
+      </div>
+    </div>
+    <div class="section-label">Este mes vs mismo mes año anterior</div>
+    <div class="kpi-grid" id="kpi-month"></div>
+    <div class="charts-row" style="margin-top:10px;">
+      <div class="card"><h3>Comidas: mes actual vs año anterior</h3>
+        <div class="legend"><span><span class="ldot" style="background:#378ADD"></span>Este año</span><span><span class="ldot" style="background:#B5D4F4"></span>Año anterior</span></div>
+        <div style="position:relative;width:100%;height:210px;"><canvas id="monthComidas" role="img" aria-label="Comidas mes"></canvas></div>
+      </div>
+      <div class="card"><h3>Cenas: mes actual vs año anterior</h3>
+        <div class="legend"><span><span class="ldot" style="background:#1D9E75"></span>Este año</span><span><span class="ldot" style="background:#9FE1CB"></span>Año anterior</span></div>
+        <div style="position:relative;width:100%;height:210px;"><canvas id="monthCenas" role="img" aria-label="Cenas mes"></canvas></div>
+      </div>
+    </div>
+    <div class="section-label" style="margin-top:1.5rem;">Evolución anual — promedio diario pax</div>
+    <div class="card">
+      <div class="legend"><span><span class="ldot" style="background:#7F77DD"></span>2026</span><span><span class="ldot" style="background:#AFA9EC"></span>2025</span></div>
+      <div style="position:relative;width:100%;height:230px;"><canvas id="yearTrend" role="img" aria-label="Evolución anual"></canvas></div>
+    </div>
+    <div class="footer">Dashboard Negra Tomasa · Datos desde Notion<br><span style="opacity:.6">Histórico: mayo 2025 – hoy</span></div>
+  `;
+  document.getElementById('date-label').textContent = fmtDate(selDate);
+  buildDayKPIs();
+  buildWeekCharts();
+  buildMonthCharts();
+  buildYearTrend();
+}
+
+function buildDayKPIs() {
+  const key = dateKey(selDate);
+  const prev7 = new Date(selDate); prev7.setDate(prev7.getDate()-7);
+  const d = DATA[key], pd = DATA[dateKey(prev7)];
+  const el = document.getElementById('kpi-day');
+  if (!d) { el.innerHTML = `<div class="no-data">Sin datos para este día.</div>`; return; }
+  const tot = d.comidas+d.cenas, ptot = (pd?.comidas??0)+(pd?.cenas??0);
+  el.innerHTML = `
+    <div class="kpi"><div class="kpi-label">Comidas</div><div class="kpi-value">${d.comidas}</div>${deltaHtml(delta(d.comidas,pd?.comidas),pd?.comidas)}</div>
+    <div class="kpi"><div class="kpi-label">Cenas</div><div class="kpi-value">${d.cenas}</div>${deltaHtml(delta(d.cenas,pd?.cenas),pd?.cenas)}</div>
+    <div class="kpi"><div class="kpi-label">Total pax</div><div class="kpi-value">${tot}</div>${deltaHtml(delta(tot,ptot),ptot)}</div>
+    <div class="kpi"><div class="kpi-label">Última llamada</div><div class="kpi-value" style="font-size:22px;">${d.llamada||'–'}</div><div class="kpi-prev">Sem. ant.: ${pd?.llamada||'–'}</div></div>
+  `;
+}
+
+function getRange(from, days) {
+  const labels=[],comidas=[],cenas=[];
+  for(let i=0;i<days;i++){
+    const d=new Date(from); d.setDate(d.getDate()+i);
+    const k=dateKey(d);
+    labels.push(d.toLocaleDateString('es-ES',{day:'numeric',month:'short'}));
+    comidas.push(DATA[k]?.comidas??null);
+    cenas.push(DATA[k]?.cenas??null);
+  }
+  return {labels,comidas,cenas};
+}
+
+function buildWeekCharts() {
+  const w1s=new Date(selDate); w1s.setDate(w1s.getDate()-6);
+  const w2s=new Date(w1s); w2s.setDate(w2s.getDate()-7);
+  const w1=getRange(w1s,7), w2=getRange(w2s,7);
+  ['weekComidas','weekCenas'].forEach(id => destroyChart(id));
+  charts.weekComidas = new Chart(document.getElementById('weekComidas'),{type:'bar',data:{labels:w1.labels,datasets:[{data:w1.comidas,backgroundColor:'#378ADD',borderRadius:3,spanGaps:true},{data:w2.comidas,backgroundColor:'#B5D4F4',borderRadius:3,spanGaps:true}]},options:baseOpts});
+  charts.weekCenas   = new Chart(document.getElementById('weekCenas'),  {type:'bar',data:{labels:w1.labels,datasets:[{data:w1.cenas,  backgroundColor:'#1D9E75',borderRadius:3,spanGaps:true},{data:w2.cenas,  backgroundColor:'#9FE1CB',borderRadius:3,spanGaps:true}]},options:baseOpts});
+}
+
+function buildMonthCharts() {
+  const yr=selDate.getFullYear(), mo=selDate.getMonth();
+  const dim=new Date(yr,mo+1,0).getDate();
+  const labels=Array.from({length:dim},(_,i)=>i+1);
+  const tC=[],tCe=[],pC=[],pCe=[];
+  for(let d=1;d<=dim;d++){
+    const pad=String(d).padStart(2,'0'),mp=String(mo+1).padStart(2,'0');
+    tC.push(DATA[`${yr}-${mp}-${pad}`]?.comidas??null);
+    tCe.push(DATA[`${yr}-${mp}-${pad}`]?.cenas??null);
+    pC.push(DATA[`${yr-1}-${mp}-${pad}`]?.comidas??null);
+    pCe.push(DATA[`${yr-1}-${mp}-${pad}`]?.cenas??null);
+  }
+  const s=arr=>arr.reduce((a,v)=>a+(v??0),0);
+  const stC=s(tC),stCe=s(tCe),spC=s(pC),spCe=s(pCe);
+  const mn=selDate.toLocaleDateString('es-ES',{month:'long'});
+  document.getElementById('kpi-month').innerHTML=`
+    <div class="kpi"><div class="kpi-label">Comidas ${mn} ${yr}</div><div class="kpi-value">${stC.toLocaleString()}</div>${deltaHtml(delta(stC,spC),spC)}</div>
+    <div class="kpi"><div class="kpi-label">Cenas ${mn} ${yr}</div><div class="kpi-value">${stCe.toLocaleString()}</div>${deltaHtml(delta(stCe,spCe),spCe)}</div>
+    <div class="kpi"><div class="kpi-label">Total pax ${mn} ${yr}</div><div class="kpi-value">${(stC+stCe).toLocaleString()}</div>${deltaHtml(delta(stC+stCe,spC+spCe),spC+spCe)}</div>
+    <div class="kpi"><div class="kpi-label">Días con datos</div><div class="kpi-value">${tC.filter(v=>v!==null).length}</div><div class="kpi-prev">Año ant.: ${pC.filter(v=>v!==null).length} días</div></div>
+  `;
+  const lo={responsive:true,maintainAspectRatio:false,elements:{point:{radius:2}},plugins:{legend:{display:false}},scales:{x:{grid:{display:false},ticks:{font:{size:10},autoSkip:true,maxTicksLimit:10}},y:{beginAtZero:true,ticks:{font:{size:10}},grid:{color:'rgba(128,128,128,0.12)'}}}};
+  ['monthComidas','monthCenas'].forEach(id=>destroyChart(id));
+  charts.monthComidas=new Chart(document.getElementById('monthComidas'),{type:'line',data:{labels,datasets:[{data:tC,borderColor:'#378ADD',backgroundColor:'rgba(55,138,221,0.1)',fill:true,tension:0.3,spanGaps:true},{data:pC,borderColor:'#B5D4F4',tension:0.3,spanGaps:true,borderDash:[4,3]}]},options:lo});
+  charts.monthCenas  =new Chart(document.getElementById('monthCenas'),  {type:'line',data:{labels,datasets:[{data:tCe,borderColor:'#1D9E75',backgroundColor:'rgba(29,158,117,0.1)',fill:true,tension:0.3,spanGaps:true},{data:pCe,borderColor:'#9FE1CB',tension:0.3,spanGaps:true,borderDash:[4,3]}]},options:lo});
+}
+
+function buildYearTrend() {
+  const months=['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+  const t26=[],t25=[];
+  for(let m=0;m<12;m++){
+    let s26=0,c26=0,s25=0,c25=0;
+    const dim=new Date(new Date().getFullYear(),m+1,0).getDate();
+    for(let d=1;d<=dim;d++){
+      const pad=String(d).padStart(2,'0'),mp=String(m+1).padStart(2,'0');
+      const k26=`2026-${mp}-${pad}`,k25=`2025-${mp}-${pad}`;
+      if(DATA[k26]){s26+=DATA[k26].comidas+DATA[k26].cenas;c26++;}
+      if(DATA[k25]){s25+=DATA[k25].comidas+DATA[k25].cenas;c25++;}
+    }
+    t26.push(c26?Math.round(s26/c26):null);
+    t25.push(c25?Math.round(s25/c25):null);
+  }
+  destroyChart('yearTrend');
+  charts.yearTrend=new Chart(document.getElementById('yearTrend'),{type:'line',data:{labels:months,datasets:[{label:'2026',data:t26,borderColor:'#7F77DD',backgroundColor:'rgba(127,119,221,0.12)',fill:true,tension:0.4,spanGaps:true,pointRadius:4},{label:'2025',data:t25,borderColor:'#AFA9EC',tension:0.4,spanGaps:true,borderDash:[5,4],pointRadius:3}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{grid:{display:false},ticks:{font:{size:12}}},y:{beginAtZero:true,ticks:{font:{size:11}},grid:{color:'rgba(128,128,128,0.12)'}}}}});
+}
+
+// Modal
+function openModal() {
+  const today = new Date();
+  document.getElementById('f-fecha').value = dateKey(today);
+  document.getElementById('f-comidas').value = '';
+  document.getElementById('f-cenas').value = '';
+  document.getElementById('f-llamada').value = '';
+  document.getElementById('modal-error').textContent = '';
+  document.getElementById('modal').classList.add('open');
+}
+function closeModal() { document.getElementById('modal').classList.remove('open'); }
+
+async function saveRecord() {
+  const fecha   = document.getElementById('f-fecha').value;
+  const comidas = parseInt(document.getElementById('f-comidas').value) || 0;
+  const cenas   = parseInt(document.getElementById('f-cenas').value)   || 0;
+  const llamada = document.getElementById('f-llamada').value.trim();
+  if (!fecha) { document.getElementById('modal-error').textContent = 'La fecha es obligatoria.'; return; }
+  const btn = document.querySelector('.btn-save');
+  btn.textContent = 'Guardando...'; btn.disabled = true;
+  try {
+    const res = await fetch(WORKER_URL + '/add', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ fecha, comidas, cenas, llamada })
+    });
+    if (!res.ok) throw new Error();
+    DATA[fecha] = { comidas, cenas, llamada: llamada || null };
+    closeModal();
+    renderDashboard();
+    document.getElementById('sync-status').textContent = `Guardado en Notion · ${new Date().toLocaleTimeString('es-ES',{hour:'2-digit',minute:'2-digit'})}`;
+  } catch(e) {
+    document.getElementById('modal-error').textContent = 'Error al guardar. Comprueba la conexión.';
+  }
+  btn.textContent = 'Guardar en Notion'; btn.disabled = false;
+}
+
+// Auto-refresh cada 5 minutos
+setInterval(loadData, 5 * 60 * 1000);
+
+// Arranque
+loadData();
+</script>
+</body>
+</html>
